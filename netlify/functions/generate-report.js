@@ -1,4 +1,3 @@
-
 // generate-report.js
 //
 // Takes the customer's Discovery answers, fills the generate-user prompt
@@ -27,21 +26,13 @@ function fillTemplate(template, vars) {
   });
 }
 
-// Models sometimes wrap JSON in markdown code fences or add stray
-// whitespace even when told not to. Strip that defensively before parsing.
-function extractJSON(text) {
-  let cleaned = text.trim();
-  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-  return cleaned;
-}
-
 // The spec's accepted fields don't include a reference, but both prompts
 // need one. If the front end doesn't send one, we generate one here so
 // every report is traceable.
 function makeReference() {
   const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
   const stamp = Date.now().toString(36).toUpperCase();
-  return `A&C-${stamp}-${rand}`;
+  return `BP-${stamp}-${rand}`;
 }
 
 exports.handler = async function (event) {
@@ -70,7 +61,7 @@ exports.handler = async function (event) {
     };
   }
 
-  const { customer_name, customer_email, situation, goal, constraint } = body;
+  const { customer_name, customer_email, situation, goal, constraint, quick_facts, constraints } = body;
 
   if (!customer_name || !situation || !goal || !constraint) {
     return {
@@ -80,15 +71,25 @@ exports.handler = async function (event) {
   }
 
   const reference = (body.reference && String(body.reference).trim()) || makeReference();
+const qf = quick_facts || {};
+const constraintsList = Array.isArray(constraints) && constraints.length > 0
+  ? constraints.map(c => `- ${c}`).join('\n')
+  : '- (none ticked)';
 
-  const userPrompt = fillTemplate(USER_TEMPLATE, {
-    reference,
-    customer_name,
-    situation,
-    goal,
-    constraint
-  });
-
+const userPrompt = fillTemplate(USER_TEMPLATE, {
+  reference,
+  customer_name,
+  situation,
+  goal,
+  constraint,
+  hours: qf.hours || '(not provided)',
+  capital: qf.capital || '(not provided)',
+  public_ok: qf.public_ok || '(not provided)',
+  camera_ok: qf.camera_ok || '(not provided)',
+  transport: qf.transport || '(not provided)',
+  timeline: qf.timeline || '(not provided)',
+  constraints_list: constraintsList
+});
   let response, data;
   try {
     response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -99,8 +100,9 @@ exports.handler = async function (event) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 4000,
+        model: 'claude-sonnet-5-5',
+        max_tokens: 2000,
+        temperature: 0.4,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userPrompt }]
       })
@@ -131,14 +133,11 @@ exports.handler = async function (event) {
 
   let parsed;
   try {
-    parsed = JSON.parse(extractJSON(text));
+    parsed = JSON.parse(text);
   } catch (e) {
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        status: 'error',
-        message: 'Could not parse the model response as JSON. Raw start: ' + text.slice(0, 300)
-      })
+      body: JSON.stringify({ status: 'error', message: 'Could not parse the model response as JSON.' })
     };
   }
 
@@ -149,6 +148,8 @@ exports.handler = async function (event) {
   // Carry the email and a confirmed reference through to the front end so
   // report.html and send-report.js have what they need downstream. The
   // model was never asked for customer_email, so we attach it here.
+  parsed.quick_facts = qf;
+  parsed.constraints = Array.isArray(constraints) ? constraints : [];
   parsed.customer_email = customer_email || '';
   parsed.reference = parsed.reference || reference;
 

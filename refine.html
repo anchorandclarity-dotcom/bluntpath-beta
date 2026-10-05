@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>React &amp; Refine — Anchor &amp; Clarity</title>
+<title>React &amp; Refine — Bluntpath</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -12,35 +12,27 @@
 <div class="shell" id="app"></div>
 
 <script>
-const CONSTRAINT_OPTIONS = [
-  'No money to spend to get started',
-  'Fewer than 5 hours a week available',
-  'Can\u2019t work with the public directly',
-  'No car or reliable transport',
-  'A health issue limits how much I can commit to',
-  'Need to stay anonymous / can\u2019t use my real name publicly'
-];
-
 let draft = null;
-let verdicts = {}; // { directionName: 'yes' | 'maybe' | 'no' }
+let verdicts = {};
 
-function loadDraft(){
+function loadDraft() {
   const raw = sessionStorage.getItem('ac_current_report');
-  if(!raw){
-    return null;
-  }
-  try{
+  if (!raw) return null;
+  try {
     const parsed = JSON.parse(raw);
-    if(!parsed.section_3_directions){
-      return null;
-    }
+    if (!parsed.section_3_directions) return null;
     return parsed;
-  }catch(e){
+  } catch (e) {
     return null;
   }
 }
 
-function renderMissing(){
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderMissing() {
   document.getElementById('app').innerHTML = `
     <span class="tab mono">CASE FILE \u00b7 REACT &amp; REFINE</span>
     <div class="folder">
@@ -51,7 +43,7 @@ function renderMissing(){
   `;
 }
 
-function renderForm(){
+function renderForm() {
   const directionCards = draft.section_3_directions.map((d, i) => `
     <div class="exhibit" data-direction="${i}">
       <h3 style="margin:0 0 6px;">${escapeHtml(d.name)}</h3>
@@ -72,13 +64,6 @@ function renderForm(){
     </div>
   `).join('');
 
-  const constraintChecks = CONSTRAINT_OPTIONS.map((label, i) => `
-    <div class="checkbox-row">
-      <input type="checkbox" id="c${i}" data-constraint-label="${escapeHtml(label)}">
-      <label for="c${i}" style="margin:0;">${escapeHtml(label)}</label>
-    </div>
-  `).join('');
-
   document.getElementById('app').innerHTML = `
     <span class="tab mono">CASE FILE \u00b7 REACT &amp; REFINE</span>
     <div class="folder">
@@ -90,20 +75,17 @@ function renderForm(){
     <div style="height:20px;"></div>
     ${directionCards}
 
-    <div class="folder" style="margin-top:8px;">
-      <h3 style="margin:0 0 14px;">Practical limits</h3>
-      ${constraintChecks}
-      <div class="field" style="margin-top:14px;">
-        <label>Anything else that matters?</label>
-        <textarea id="constraint-notes" placeholder="Optional free-text notes."></textarea>
+    <div class="folder" style="margin-top:20px;">
+      <div class="field">
+        <label>Anything else we should know?</label>
+        <textarea id="extra-notes" placeholder="Optional. Anything that would change your answer?"></textarea>
       </div>
-
       <div id="error-msg" style="display:none;color:#E8B7A4;font-size:13.5px;margin-bottom:14px;"></div>
       <button class="btn btn-primary" id="submit-btn">Get my final opportunity</button>
     </div>
   `;
 
-  document.querySelectorAll('.chip').forEach(chip => {
+  document.querySelectorAll('.chip[data-verdict]').forEach(chip => {
     chip.onclick = () => {
       const i = chip.dataset.i;
       const verdict = chip.dataset.verdict;
@@ -118,7 +100,7 @@ function renderForm(){
   document.getElementById('submit-btn').onclick = handleSubmit;
 }
 
-function renderLoading(){
+function renderLoading() {
   document.getElementById('app').innerHTML = `
     <div class="loading">
       <div class="spinner"></div>
@@ -127,12 +109,7 @@ function renderLoading(){
   `;
 }
 
-function escapeHtml(str){
-  return String(str == null ? '' : str)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-async function handleSubmit(){
+async function handleSubmit() {
   const errorEl = document.getElementById('error-msg');
   const directions = draft.section_3_directions;
 
@@ -141,7 +118,7 @@ async function handleSubmit(){
 
   directions.forEach((d, i) => {
     const verdict = verdicts[i];
-    if(!verdict) missingVerdict = true;
+    if (!verdict) missingVerdict = true;
     const reasonEl = document.querySelector(`textarea[data-i="${i}"][data-field="reason"]`);
     const difficultyEl = document.querySelector(`textarea[data-i="${i}"][data-field="difficulty"]`);
     reactions.push({
@@ -152,21 +129,17 @@ async function handleSubmit(){
     });
   });
 
-  if(missingVerdict){
+  if (missingVerdict) {
     errorEl.textContent = 'Please give a YES, MAYBE, or NO for every direction.';
     errorEl.style.display = 'block';
     return;
   }
 
-  const ticked = [];
-  document.querySelectorAll('[data-constraint-label]').forEach(box => {
-    if(box.checked) ticked.push(box.dataset.constraintLabel);
-  });
-  const notes = document.getElementById('constraint-notes').value.trim();
+  const notes = document.getElementById('extra-notes').value.trim();
 
   renderLoading();
 
-  try{
+  try {
     const response = await fetch('/.netlify/functions/refine-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -176,13 +149,18 @@ async function handleSubmit(){
         customer_email: draft.customer_email,
         original_directions: directions,
         reactions: reactions,
-        constraints: { ticked, notes }
+        constraints: {
+          // carried forward from Discovery, plus any new notes from refine
+          ticked_from_discovery: draft.constraints || [],
+          quick_facts: draft.quick_facts || {},
+          notes
+        }
       })
     });
 
     const data = await response.json();
 
-    if(!response.ok || data.status === 'error'){
+    if (!response.ok || data.status === 'error') {
       sessionStorage.setItem('ac_report_error', data.message || 'Something went wrong refining your report.');
       window.location.href = '/report.html';
       return;
@@ -190,16 +168,16 @@ async function handleSubmit(){
 
     sessionStorage.setItem('ac_current_report', JSON.stringify(data));
     window.location.href = '/report.html';
-  }catch(err){
+  } catch (err) {
     sessionStorage.setItem('ac_report_error', 'Could not reach the server. Please try again.');
     window.location.href = '/report.html';
   }
 }
 
 draft = loadDraft();
-if(!draft){
+if (!draft) {
   renderMissing();
-}else{
+} else {
   renderForm();
 }
 </script>

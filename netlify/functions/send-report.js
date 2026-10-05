@@ -174,7 +174,7 @@ exports.handler = async function (event) {
   }
 
   const customerName = report.customer_name || 'there';
-  const reference = report.reference || 'A&C-UNSET';
+  const reference = report.reference || 'BP-UNSET';
   const reportBody = renderReportBody(report);
 
   const html = EMAIL_TEMPLATE
@@ -196,7 +196,8 @@ exports.handler = async function (event) {
         Authorization: `Bearer ${resendKey}`
       },
       body: JSON.stringify({
-        from: 'Anchor & Clarity <reports@anchorandclarity.com>',
+        // TODO: replace with your verified Resend sending domain/address.
+        from: 'Bluntpath <anchorandclarity@gmail.com>',
         to: [toAddress],
         subject,
         html

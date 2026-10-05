@@ -27,14 +27,6 @@ function fillTemplate(template, vars) {
   });
 }
 
-// Models sometimes wrap JSON in markdown code fences or add stray
-// whitespace even when told not to. Strip that defensively before parsing.
-function extractJSON(text) {
-  let cleaned = text.trim();
-  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-  return cleaned;
-}
-
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
     return {
@@ -91,8 +83,9 @@ exports.handler = async function (event) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 4000,
+        model: 'claude-sonnet-5-5',
+        max_tokens: 2000,
+        temperature: 0.4,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userPrompt }]
       })
@@ -123,14 +116,11 @@ exports.handler = async function (event) {
 
   let parsed;
   try {
-    parsed = JSON.parse(extractJSON(text));
+    parsed = JSON.parse(text);
   } catch (e) {
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        status: 'error',
-        message: 'Could not parse the model response as JSON. Raw start: ' + text.slice(0, 300)
-      })
+      body: JSON.stringify({ status: 'error', message: 'Could not parse the model response as JSON.' })
     };
   }
 

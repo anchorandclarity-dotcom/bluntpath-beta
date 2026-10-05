@@ -3,11 +3,23 @@ A customer has completed the Discovery step. Analyse their answers and return th
 Reference: {{reference}}
 Customer name: {{customer_name}}
 
+--- QUICK FACTS (hard constraints, treat as non-negotiable) ---
+Hours available per week: {{hours}}
+Capital available before earning: {{capital}}
+Willing to work with public face-to-face: {{public_ok}}
+Willing to appear on camera or use real name publicly: {{camera_ok}}
+Has car or reliable transport: {{transport}}
+Timeline for first money: {{timeline}}
+
+--- CONSTRAINT CHECKLIST (things the customer has explicitly flagged) ---
+{{constraints_list}}
+
+--- DEEPER ANSWERS ---
 Situation:
 {{situation}}
 
-Goal:
+Goal (30 days):
 {{goal}}
 
-Constraint:
+What they've already tried, and why it didn't work:
 {{constraint}}
