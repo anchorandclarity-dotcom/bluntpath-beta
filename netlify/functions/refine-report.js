@@ -82,14 +82,12 @@ exports.handler = async function (event) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({
-        model: 'claude-sonnet-5-5',
-        max_tokens: 4000,
-        
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }]
-      })
-    });
+     body: JSON.stringify({
+  model: 'claude-sonnet-5-5',
+  max_tokens: 4000,
+  system: SYSTEM_PROMPT,
+  messages: [{ role: 'user', content: userPrompt }]
+})
     data = await response.json();
   } catch (err) {
     return {
