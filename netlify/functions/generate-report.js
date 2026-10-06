@@ -102,7 +102,7 @@ const userPrompt = fillTemplate(USER_TEMPLATE, {
       body: JSON.stringify({
         model: 'claude-sonnet-5-5',
         max_tokens: 2000,
-        temperature: 0.4,
+        
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userPrompt }]
       })
