@@ -28,11 +28,22 @@ function escapeHtml(str){
 }
 
 function renderError(message){
+  const raw = sessionStorage.getItem('ac_report_error_full');
+  let debugHtml = '';
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.debug_preview) {
+        debugHtml = '<h3 style="margin-top:20px;">Debug preview</h3><pre style="background:#111;color:#eee;padding:12px;overflow:auto;font-size:12px;white-space:pre-wrap;">' + escapeHtml(parsed.debug_preview) + '</pre>';
+      }
+    } catch(e) {}
+  }
   document.getElementById('app').innerHTML = `
-    <span class="tab mono">CASE FILE \u00b7 ERROR</span>
+    <span class="tab mono">CASE FILE · ERROR</span>
     <div class="error-box">
       <h2>Something went wrong</h2>
       <p>${escapeHtml(message || 'We could not generate your report. No charge has been made for this attempt.')}</p>
+      ${debugHtml}
       <div style="margin-top:16px;">
         <a class="btn btn-primary" href="/discover.html">Try again</a>
       </div>
