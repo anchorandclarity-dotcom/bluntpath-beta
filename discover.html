@@ -246,6 +246,7 @@ async function handleSubmit() {
 
     if (!response.ok || data.status === 'error') {
       sessionStorage.setItem('ac_report_error', data.message || 'Something went wrong generating your report.');
+     sessionStorage.setItem('ac_report_error_full', JSON.stringify(data));
       window.location.href = '/report.html';
       return;
     }
