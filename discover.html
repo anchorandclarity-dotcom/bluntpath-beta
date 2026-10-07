@@ -13,6 +13,14 @@
 
 <script>
 // ---------- Question definitions ----------
+//
+// NOTE ON THIS TRIM: the original version asked hours/capital/transport/
+// public-facing/anonymity TWICE — once as a tap-choice in Part 1, once
+// again as a checkbox in Part 2. Only "health issue" was genuinely new
+// information in Part 2, so it's folded in here as a 7th tap-choice
+// instead of its own section. Everything downstream (generate-report.js,
+// the prompts) still receives the same "constraints" array shape it did
+// before, so nothing else needed to change.
 
 const QUICK_FACTS = [
   {
@@ -44,16 +52,12 @@ const QUICK_FACTS = [
     key: 'timeline',
     label: 'How fast do you need to see first money?',
     options: ['This week', 'This month', 'Within 3 months']
+  },
+  {
+    key: 'health',
+    label: 'Does a health issue limit how much you can commit to right now?',
+    options: ['No issue', 'Yes, it limits me']
   }
-];
-
-const CONSTRAINT_OPTIONS = [
-  'No money to spend to get started',
-  'Fewer than 5 hours a week available',
-  'Can\u2019t work with the public directly',
-  'No car or reliable transport',
-  'A health issue limits how much I can commit to',
-  'Need to stay anonymous / can\u2019t use my real name publicly'
 ];
 
 const DEEP_QUESTIONS = [
@@ -80,7 +84,6 @@ const DEEP_QUESTIONS = [
 // ---------- State ----------
 let answers = {
   quick_facts: {},
-  constraints: [],
   deep: {}
 };
 
@@ -95,15 +98,6 @@ function renderQuickFacts() {
           <button type="button" class="chip" data-quick="${q.key}" data-value="${escapeHtml(opt)}">${escapeHtml(opt)}</button>
         `).join('')}
       </div>
-    </div>
-  `).join('');
-}
-
-function renderConstraints() {
-  return CONSTRAINT_OPTIONS.map((label, i) => `
-    <div class="checkbox-row">
-      <input type="checkbox" id="c${i}" data-constraint-label="${escapeHtml(label)}">
-      <label for="c${i}" style="margin:0;">${escapeHtml(label)}</label>
     </div>
   `).join('');
 }
@@ -123,8 +117,8 @@ function renderForm() {
     <span class="tab mono">CASE FILE \u00b7 DISCOVERY</span>
 
     <div class="folder">
-      <h1>Three short parts</h1>
-      <div class="sub">Part one takes 30 seconds. Part two is a checklist. Part three is where you tell us the truth.</div>
+      <h1>Two short parts</h1>
+      <div class="sub">Part one is quick taps. Part two is where you tell us the truth.</div>
 
       <div class="field">
         <label for="customer_name">Your name</label>
@@ -144,13 +138,7 @@ function renderForm() {
     </div>
 
     <div class="folder" style="margin-top:20px;">
-      <h2 style="margin-top:0;">Part 2 \u2014 Things that would rule a direction out</h2>
-      <p class="note" style="margin-bottom:16px;">Tick everything that applies. If something isn't true for you, leave it blank.</p>
-      ${renderConstraints()}
-    </div>
-
-    <div class="folder" style="margin-top:20px;">
-      <h2 style="margin-top:0;">Part 3 \u2014 Three deeper questions</h2>
+      <h2 style="margin-top:0;">Part 2 \u2014 Three deeper questions</h2>
       <p class="note" style="margin-bottom:16px;">Take your time. Specific beats polished. Real examples beat vague ambition.</p>
       ${renderDeepQuestions()}
     </div>
@@ -158,7 +146,7 @@ function renderForm() {
     <div class="folder" style="margin-top:20px;">
       <div id="error-msg" style="display:none;color:#E8B7A4;font-size:13.5px;margin-bottom:14px;"></div>
       <button class="btn btn-primary" id="submit-btn">Get my directions</button>
-      <p class="note">This takes about three minutes. We'll read your answers carefully.</p>
+      <p class="note">This takes about two minutes. We'll read your answers carefully.</p>
     </div>
   `;
 
@@ -193,6 +181,17 @@ function escapeHtml(str) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// Rebuilds the "constraints" array the backend already expects, from the
+// single health tap-choice, so generate-report.js and the prompt
+// templates need zero changes.
+function buildConstraintsFromQuickFacts(qf) {
+  const constraints = [];
+  if (qf.health === 'Yes, it limits me') {
+    constraints.push('A health issue limits how much I can commit to.');
+  }
+  return constraints;
+}
+
 // ---------- Submission ----------
 
 async function handleSubmit() {
@@ -205,12 +204,6 @@ async function handleSubmit() {
     deep[ta.dataset.deep] = ta.value.trim();
   });
 
-  // Collect ticked constraints
-  const constraints = [];
-  document.querySelectorAll('[data-constraint-label]').forEach(box => {
-    if (box.checked) constraints.push(box.dataset.constraintLabel);
-  });
-
   // Validate
   const errorEl = document.getElementById('error-msg');
   const missingQuick = QUICK_FACTS.filter(q => !answers.quick_facts[q.key]);
@@ -220,12 +213,14 @@ async function handleSubmit() {
     return;
   }
   if (!customer_name || !customer_email || !deep.situation || !deep.goal || !deep.constraint) {
-    errorEl.textContent = 'Please fill in your name, email, and all three questions in Part 3.';
+    errorEl.textContent = 'Please fill in your name, email, and all three questions in Part 2.';
     errorEl.style.display = 'block';
     return;
   }
 
   renderLoading();
+
+  const constraints = buildConstraintsFromQuickFacts(answers.quick_facts);
 
   try {
     const response = await fetch('/.netlify/functions/generate-report', {
@@ -246,7 +241,7 @@ async function handleSubmit() {
 
     if (!response.ok || data.status === 'error') {
       sessionStorage.setItem('ac_report_error', data.message || 'Something went wrong generating your report.');
-     sessionStorage.setItem('ac_report_error_full', JSON.stringify(data));
+      sessionStorage.setItem('ac_report_error_full', JSON.stringify(data));
       window.location.href = '/report.html';
       return;
     }
