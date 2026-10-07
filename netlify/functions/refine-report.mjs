@@ -13,16 +13,26 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Don't name this `__dirname`: the esbuild bundler injects its own
+// `__dirname`, and redeclaring it crashes the function on load.
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
-const SYSTEM_PROMPT = fs.readFileSync(
-  path.join(__dirname, '../../prompts/refine-system.txt'),
-  'utf8'
-);
-const USER_TEMPLATE = fs.readFileSync(
-  path.join(__dirname, '../../prompts/refine-user.txt'),
-  'utf8'
-);
+// The bundled function doesn't sit at the same path as the source file, so
+// look for the prompt in each place it may have been included.
+function readPrompt(name) {
+  const candidates = [
+    path.join(moduleDir, '../../prompts', name),
+    path.join(moduleDir, 'prompts', name),
+    path.join(process.cwd(), 'prompts', name)
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+  }
+  throw new Error(`Prompt file not found: ${name}`);
+}
+
+const SYSTEM_PROMPT = readPrompt('refine-system.txt');
+const USER_TEMPLATE = readPrompt('refine-user.txt');
 
 function fillTemplate(template, vars) {
   return template.replace(/{{\s*([\w]+)\s*}}/g, (_, key) => {
