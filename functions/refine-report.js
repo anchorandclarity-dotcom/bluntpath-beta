@@ -84,7 +84,7 @@ exports.handler = async function (event) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5-5',
-        max_tokens: 2000,
+        max_tokens: 4000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userPrompt }]
       })
@@ -107,19 +107,33 @@ exports.handler = async function (event) {
     };
   }
 
-  const text = (data.content || [])
+  let raw = (data.content || [])
     .filter((b) => b.type === 'text')
     .map((b) => b.text)
     .join('\n')
     .trim();
 
+  // Strip markdown code fences if the model added them
+  raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+  // If the model added preamble before the JSON, grab from the first { to the last }
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    raw = raw.slice(firstBrace, lastBrace + 1);
+  }
+
   let parsed;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(raw);
   } catch (e) {
     return {
       statusCode: 200,
-      body: JSON.stringify({ status: 'error', message: 'Could not parse the model response as JSON.' })
+      body: JSON.stringify({
+        status: 'error',
+        message: 'Could not parse the model response as JSON.',
+        debug_preview: raw.slice(0, 300)
+      })
     };
   }
 
