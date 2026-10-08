@@ -7,6 +7,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/style.css">
+<style>
+  .consent-row{margin:0 0 18px;}
+  .consent-row label{display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.55;cursor:pointer;}
+  .consent-row input[type="checkbox"]{flex:0 0 auto;width:20px;height:20px;margin-top:2px;cursor:pointer;}
+  .consent-row a{text-decoration:underline;}
+  #submit-btn:disabled{opacity:0.45;cursor:not-allowed;}
+</style>
 </head>
 <body>
 <div class="shell" id="app"></div>
@@ -14,13 +21,11 @@
 <script>
 // ---------- Question definitions ----------
 //
-// NOTE ON THIS TRIM: the original version asked hours/capital/transport/
-// public-facing/anonymity TWICE — once as a tap-choice in Part 1, once
-// again as a checkbox in Part 2. Only "health issue" was genuinely new
-// information in Part 2, so it's folded in here as a 7th tap-choice
-// instead of its own section. Everything downstream (generate-report.js,
-// the prompts) still receives the same "constraints" array shape it did
-// before, so nothing else needed to change.
+// NOTE: the last quick-fact used to ask about "a health issue". It now asks
+// about time/energy limits in neutral terms, so we no longer collect health
+// information. The internal key ("health") and the answer value
+// ("Yes, it limits me") are deliberately unchanged, so generate-report.js and
+// the prompt files receive exactly the same data shape as before.
 
 const QUICK_FACTS = [
   {
@@ -55,8 +60,9 @@ const QUICK_FACTS = [
   },
   {
     key: 'health',
-    label: 'Does a health issue limit how much you can commit to right now?',
-    options: ['No issue', 'Yes, it limits me']
+    label: 'Is anything limiting the time or energy you can put into this right now?',
+    hint: 'For example caring duties, other commitments, or low energy. Please don\u2019t include medical details.',
+    options: ['Nothing significant', 'Yes, it limits me']
   }
 ];
 
@@ -93,6 +99,7 @@ function renderQuickFacts() {
   return QUICK_FACTS.map(q => `
     <div class="exhibit">
       <span class="exhibit-label">${escapeHtml(q.label.toUpperCase())}</span>
+      ${q.hint ? `<div class="hint" style="margin-top:6px;">${escapeHtml(q.hint)}</div>` : ''}
       <div class="chip-row" style="margin-top:10px;">
         ${q.options.map(opt => `
           <button type="button" class="chip" data-quick="${q.key}" data-value="${escapeHtml(opt)}">${escapeHtml(opt)}</button>
@@ -139,18 +146,25 @@ function renderForm() {
 
     <div class="folder" style="margin-top:20px;">
       <h2 style="margin-top:0;">Part 2 \u2014 Three deeper questions</h2>
-      <p class="note" style="margin-bottom:16px;">Take your time. Specific beats polished. Real examples beat vague ambition.</p>
+      <p class="note" style="margin-bottom:16px;">Take your time. Specific beats polished. Real examples beat vague ambition. Please don\u2019t include sensitive details such as health information.</p>
       ${renderDeepQuestions()}
     </div>
 
     <div class="folder" style="margin-top:20px;">
-      <div id="error-msg" style="display:none;color:#E8B7A4;font-size:13.5px;margin-bottom:14px;"></div>
-      <button class="btn btn-primary" id="submit-btn">Get my directions</button>
+      <div class="consent-row">
+        <label for="waiver-check">
+          <input type="checkbox" id="waiver-check">
+          <span>I want my report created straight away. I understand that once it has been generated, I lose my right to cancel and get a refund within 14 days. See the <a href="/refund-policy.html" target="_blank" rel="noopener">Refund Policy</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+        </label>
+      </div>
+      <div id="error-msg" role="alert" style="display:none;color:#E8B7A4;font-size:13.5px;margin-bottom:14px;"></div>
+      <button class="btn btn-primary" id="submit-btn" disabled>Get my directions</button>
       <p class="note">This takes about two minutes. We'll read your answers carefully.</p>
     </div>
   `;
 
   wireQuickFactChips();
+  wireWaiver();
   document.getElementById('submit-btn').onclick = handleSubmit;
 }
 
@@ -165,6 +179,14 @@ function wireQuickFactChips() {
       chip.classList.add('selected-yes');
     };
   });
+}
+
+// The submit button stays disabled until the cancellation-waiver box is ticked.
+function wireWaiver() {
+  const box = document.getElementById('waiver-check');
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = !box.checked;
+  box.onchange = () => { btn.disabled = !box.checked; };
 }
 
 function renderLoading() {
@@ -182,12 +204,12 @@ function escapeHtml(str) {
 }
 
 // Rebuilds the "constraints" array the backend already expects, from the
-// single health tap-choice, so generate-report.js and the prompt
-// templates need zero changes.
+// single tap-choice, so generate-report.js and the prompt templates need
+// zero changes. The wording is neutral (no health information).
 function buildConstraintsFromQuickFacts(qf) {
   const constraints = [];
   if (qf.health === 'Yes, it limits me') {
-    constraints.push('A health issue limits how much I can commit to.');
+    constraints.push('Other commitments or limited energy restrict how much I can commit to.');
   }
   return constraints;
 }
@@ -206,6 +228,13 @@ async function handleSubmit() {
 
   // Validate
   const errorEl = document.getElementById('error-msg');
+
+  if (!document.getElementById('waiver-check').checked) {
+    errorEl.textContent = 'Please tick the box to confirm you want your report created straight away.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
   const missingQuick = QUICK_FACTS.filter(q => !answers.quick_facts[q.key]);
   if (missingQuick.length > 0) {
     errorEl.textContent = 'Please answer all of Part 1 (the quick facts).';
