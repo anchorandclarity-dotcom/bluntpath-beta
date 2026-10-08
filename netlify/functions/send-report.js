@@ -197,7 +197,7 @@ exports.handler = async function (event) {
       },
       body: JSON.stringify({
         from: 'Bluntpath <reports@bluntpath.com>',
-        reply_to: 'bluntpath@gmail.com
+        reply_to: 'bluntpath@gmail.com',
         to: [toAddress],
         subject,
         html
