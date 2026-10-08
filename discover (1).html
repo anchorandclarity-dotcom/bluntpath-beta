@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Discovery — Bluntpath</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/style.css">
+<style>
+  .consent-row{margin:0 0 18px;}
+  .consent-row label{display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.55;cursor:pointer;}
+  .consent-row input[type="checkbox"]{flex:0 0 auto;width:20px;height:20px;margin-top:2px;cursor:pointer;}
+  .consent-row a{text-decoration:underline;}
+  #submit-btn:disabled{opacity:0.45;cursor:not-allowed;}
+</style>
+</head>
+<body>
+<div class="shell" id="app"></div>
+
+<script>
+// ---------- Question definitions ----------
+//
+// NOTE: the last quick-fact used to ask about "a health issue". It now asks
+// about time/energy limits in neutral terms, so we no longer collect health
+// information. The internal key ("health") and the answer value
+// ("Yes, it limits me") are deliberately unchanged, so generate-report.js and
+// the prompt files receive exactly the same data shape as before.
+
+const QUICK_FACTS = [
+  {
+    key: 'hours',
+    label: 'Hours per week you can realistically give this',
+    options: ['Under 5', '5–10', '10–20', '20+']
+  },
+  {
+    key: 'capital',
+    label: 'Money you can spend to get started, before earning anything',
+    options: ['£0', 'Up to £50', 'Up to £250', '£500+']
+  },
+  {
+    key: 'public_ok',
+    label: 'Can you work with the public face-to-face?',
+    options: ['Yes', 'No', 'Prefer not']
+  },
+  {
+    key: 'camera_ok',
+    label: 'Are you willing to use your real name publicly, or appear on camera?',
+    options: ['Yes', 'No', 'Prefer not']
+  },
+  {
+    key: 'transport',
+    label: 'Do you have a car or reliable transport?',
+    options: ['Yes', 'No']
+  },
+  {
+    key: 'timeline',
+    label: 'How fast do you need to see first money?',
+    options: ['This week', 'This month', 'Within 3 months']
+  },
+  {
+    key: 'health',
+    label: 'Is anything limiting the time or energy you can put into this right now?',
+    hint: 'For example caring duties, other commitments, or low energy. Please don\u2019t include medical details.',
+    options: ['Nothing significant', 'Yes, it limits me']
+  }
+];
+
+const DEEP_QUESTIONS = [
+  {
+    key: 'situation',
+    label: 'Your situation',
+    hint: 'Name three things you\u2019ve done in the last two years that someone paid you for, or that someone told you you were good at. Be specific.',
+    placeholder: 'For example: I used to run the rota at my old job. I baked my niece\u2019s birthday cake and three people asked for my number. I helped my mate fix his Excel mess.'
+  },
+  {
+    key: 'goal',
+    label: 'Your 30-day goal',
+    hint: 'How much money do you need to make in the next 30 days, and what would that money let you do?',
+    placeholder: 'For example: I need £500 to cover my car insurance. Or: I need £300 a month to stop worrying about bills.'
+  },
+  {
+    key: 'constraint',
+    label: 'What you\u2019ve already tried',
+    hint: 'What have you tried before that didn\u2019t work, and why do you think it didn\u2019t?',
+    placeholder: 'For example: I tried selling on Etsy but nobody saw my listings. Or: I applied for jobs but never heard back.'
+  }
+];
+
+// ---------- State ----------
+let answers = {
+  quick_facts: {},
+  deep: {}
+};
+
+// ---------- Rendering ----------
+
+function renderQuickFacts() {
+  return QUICK_FACTS.map(q => `
+    <div class="exhibit">
+      <span class="exhibit-label">${escapeHtml(q.label.toUpperCase())}</span>
+      ${q.hint ? `<div class="hint" style="margin-top:6px;">${escapeHtml(q.hint)}</div>` : ''}
+      <div class="chip-row" style="margin-top:10px;">
+        ${q.options.map(opt => `
+          <button type="button" class="chip" data-quick="${q.key}" data-value="${escapeHtml(opt)}">${escapeHtml(opt)}</button>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderDeepQuestions() {
+  return DEEP_QUESTIONS.map(q => `
+    <div class="exhibit">
+      <span class="exhibit-label">${escapeHtml(q.label.toUpperCase())}</span>
+      <div class="hint" style="margin-bottom:10px;">${escapeHtml(q.hint)}</div>
+      <textarea data-deep="${q.key}" placeholder="${escapeHtml(q.placeholder)}"></textarea>
+    </div>
+  `).join('');
+}
+
+function renderForm() {
+  document.getElementById('app').innerHTML = `
+    <span class="tab mono">CASE FILE \u00b7 DISCOVERY</span>
+
+    <div class="folder">
+      <h1>Two short parts</h1>
+      <div class="sub">Part one is quick taps. Part two is where you tell us the truth.</div>
+
+      <div class="field">
+        <label for="customer_name">Your name</label>
+        <input type="text" id="customer_name" placeholder="Full name">
+      </div>
+      <div class="field">
+        <label for="customer_email">Your email</label>
+        <input type="email" id="customer_email" placeholder="you@example.com">
+        <div class="hint">This is where your report will be sent.</div>
+      </div>
+    </div>
+
+    <div class="folder" style="margin-top:20px;">
+      <h2 style="margin-top:0;">Part 1 \u2014 Quick facts</h2>
+      <p class="note" style="margin-bottom:16px;">Tap one answer per question. Be honest, not aspirational.</p>
+      ${renderQuickFacts()}
+    </div>
+
+    <div class="folder" style="margin-top:20px;">
+      <h2 style="margin-top:0;">Part 2 \u2014 Three deeper questions</h2>
+      <p class="note" style="margin-bottom:16px;">Take your time. Specific beats polished. Real examples beat vague ambition. Please don\u2019t include sensitive details such as health information.</p>
+      ${renderDeepQuestions()}
+    </div>
+
+    <div class="folder" style="margin-top:20px;">
+      <div class="consent-row">
+        <label for="waiver-check">
+          <input type="checkbox" id="waiver-check">
+          <span>I want my report created straight away. I understand that once it has been generated, I lose my right to cancel and get a refund within 14 days. See the <a href="/refund-policy.html" target="_blank" rel="noopener">Refund Policy</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+        </label>
+      </div>
+      <div id="error-msg" role="alert" style="display:none;color:#E8B7A4;font-size:13.5px;margin-bottom:14px;"></div>
+      <button class="btn btn-primary" id="submit-btn" disabled>Get my directions</button>
+      <p class="note">This takes about two minutes. We'll read your answers carefully.</p>
+    </div>
+  `;
+
+  wireQuickFactChips();
+  wireWaiver();
+  document.getElementById('submit-btn').onclick = handleSubmit;
+}
+
+function wireQuickFactChips() {
+  document.querySelectorAll('.chip[data-quick]').forEach(chip => {
+    chip.onclick = () => {
+      const key = chip.dataset.quick;
+      answers.quick_facts[key] = chip.dataset.value;
+      document.querySelectorAll(`.chip[data-quick="${key}"]`).forEach(c => {
+        c.classList.remove('selected-yes');
+      });
+      chip.classList.add('selected-yes');
+    };
+  });
+}
+
+// The submit button stays disabled until the cancellation-waiver box is ticked.
+function wireWaiver() {
+  const box = document.getElementById('waiver-check');
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = !box.checked;
+  box.onchange = () => { btn.disabled = !box.checked; };
+}
+
+function renderLoading() {
+  document.getElementById('app').innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <div class="mono">READING YOUR ANSWERS\u2026</div>
+    </div>
+  `;
+}
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Rebuilds the "constraints" array the backend already expects, from the
+// single tap-choice, so generate-report.js and the prompt templates need
+// zero changes. The wording is neutral (no health information).
+function buildConstraintsFromQuickFacts(qf) {
+  const constraints = [];
+  if (qf.health === 'Yes, it limits me') {
+    constraints.push('Other commitments or limited energy restrict how much I can commit to.');
+  }
+  return constraints;
+}
+
+// ---------- Submission ----------
+
+async function handleSubmit() {
+  const customer_name = document.getElementById('customer_name').value.trim();
+  const customer_email = document.getElementById('customer_email').value.trim();
+
+  // Collect deep answers
+  const deep = {};
+  document.querySelectorAll('textarea[data-deep]').forEach(ta => {
+    deep[ta.dataset.deep] = ta.value.trim();
+  });
+
+  // Validate
+  const errorEl = document.getElementById('error-msg');
+
+  if (!document.getElementById('waiver-check').checked) {
+    errorEl.textContent = 'Please tick the box to confirm you want your report created straight away.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  const missingQuick = QUICK_FACTS.filter(q => !answers.quick_facts[q.key]);
+  if (missingQuick.length > 0) {
+    errorEl.textContent = 'Please answer all of Part 1 (the quick facts).';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (!customer_name || !customer_email || !deep.situation || !deep.goal || !deep.constraint) {
+    errorEl.textContent = 'Please fill in your name, email, and all three questions in Part 2.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  renderLoading();
+
+  const constraints = buildConstraintsFromQuickFacts(answers.quick_facts);
+
+  try {
+    const response = await fetch('/.netlify/functions/generate-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer_name,
+        customer_email,
+        quick_facts: answers.quick_facts,
+        constraints,
+        situation: deep.situation,
+        goal: deep.goal,
+        constraint: deep.constraint
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || data.status === 'error') {
+      sessionStorage.setItem('ac_report_error', data.message || 'Something went wrong generating your report.');
+      sessionStorage.setItem('ac_report_error_full', JSON.stringify(data));
+      window.location.href = '/report.html';
+      return;
+    }
+
+    sessionStorage.setItem('ac_current_report', JSON.stringify(data));
+    window.location.href = '/report.html';
+  } catch (err) {
+    sessionStorage.setItem('ac_report_error', 'Could not reach the server. Please try again.');
+    window.location.href = '/report.html';
+  }
+}
+
+renderForm();
+</script>
+</body>
+</html>
