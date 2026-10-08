@@ -196,8 +196,8 @@ exports.handler = async function (event) {
         Authorization: `Bearer ${resendKey}`
       },
       body: JSON.stringify({
-        // TODO: replace with your verified Resend sending domain/address.
         from: 'Bluntpath <reports@bluntpath.com>',
+        reply_to: 'bluntpath@gmail.com
         to: [toAddress],
         subject,
         html
