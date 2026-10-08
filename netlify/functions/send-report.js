@@ -197,7 +197,7 @@ exports.handler = async function (event) {
       },
       body: JSON.stringify({
         // TODO: replace with your verified Resend sending domain/address.
-        from: 'Bluntpath <anchorandclarity@gmail.com>',
+        from: 'Bluntpath <reports@bluntpath.com>',
         to: [toAddress],
         subject,
         html
